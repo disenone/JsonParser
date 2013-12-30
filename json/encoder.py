@@ -13,7 +13,7 @@ except ImportError:
 
 ESCAPE = re.compile(r'[\x00-\x1f\\"\b\f\n\r\t]')
 
-ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])') # [^\ -~] 用来匹配不开打印字符！！，且用8进制来解释该码
+ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])')
 HAS_UTF8 = re.compile(r'[\x80-\xff]')
 ESCAPE_DCT = {
     '\\': '\\\\',

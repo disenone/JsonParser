@@ -65,3 +65,4 @@ def py_make_scanner(context):
     return _scan_once
 
 make_scanner = c_make_scanner or py_make_scanner
+

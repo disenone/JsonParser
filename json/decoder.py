@@ -10,7 +10,7 @@ try:
 except ImportError:
     c_scanstring = None
 
-__all__ = ['JSONDecoder']
+__all__ = ['JSONDecoder', 'py_scanstring']
 
 FLAGS = re.VERBOSE | re.MULTILINE | re.DOTALL
 
