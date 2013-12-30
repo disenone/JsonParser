@@ -63,10 +63,10 @@ def match_string(s, idx, encoding=DEFAULT_ENCODING):
         elif s[idx] == '\\':
             # find backslash
             idx += 1;
-            if s[idx] == '/':
-                # json:"\/" -> python: '/'
-                return (BACKSLASH['/'], idx + 1)
-            elif s[idx] == 'u':
+            # if s[idx] == '/':
+            #     # json:"\/" -> python: '/'
+            #     return (BACKSLASH['/'], idx + 1)
+            if s[idx] == 'u':
                 # json \uxxxx
                 nums = s[idx + 1: idx + 5]
                 next_end = idx + 5
@@ -90,9 +90,9 @@ def match_string(s, idx, encoding=DEFAULT_ENCODING):
                 char += s[idx]
                 idx += 1
             return (unicode(char, encoding), idx)
-        elif s[idx] in CONTROL_CHAR:
-            # find control char
-            return s[idx].decode(encoding), idx + 1
+        # elif s[idx] in CONTROL_CHAR:
+        #     # find control char
+        #     return s[idx].decode(encoding), idx + 1
         else:
             # others invalid char
             msg = "Invalid control character {0!r} at".format(s[idx])
@@ -127,33 +127,44 @@ def match_integer(s, idx):
 
 
 def match_number(s, idx):
-    integer = ''
-    frac = ''
-    exp = ''
+    integer = None
+    frac = None
+    exp = None
     nextchar = s[idx:idx + 1]
 
     # get integer part
     if nextchar == '-':
-        integer += nextchar
+        integer = nextchar
         idx += 1
     _int, idx = match_integer(s, idx)
-    integer += _int
+    # check heading 0 of integer
+    if len(_int) > 1:
+        if _int[0:1] == '0':
+            return None, None, None
+    if integer:
+        integer += _int
+    else:
+        integer = _int
 
     # get frac part
     nextchar = s[idx:idx + 1]
     if nextchar == '.':
-        frac += '.'
+        frac = '.'
         idx += 1
         _int, idx = match_integer(s, idx)
         frac += _int
+    # check fraction which only has '.'
+    if not frac:
+        if frac == '.':
+            return None, None, None
 
     # get exp part
     nextchar = s[idx:idx + 1]
     if nextchar == 'e' or nextchar == 'E':
-        exp += nextchar
+        exp = nextchar
         idx += 1
         nextchar = s[idx:idx + 1]
-        if nextchar == '-':
+        if nextchar == '-' or nextchar == '+':
             exp += nextchar
             idx += 1
         _int, idx = match_integer(s, idx)
@@ -165,9 +176,9 @@ def match_number(s, idx):
 
     # check number validity
     if (integer == '-' or integer == '') and (frac == '.' or frac == ''):
-        integer = ''
-        frac = ''
-        exp = ''
+        integer = None
+        frac = None
+        exp = None
 
     return integer, frac, exp, idx
 
@@ -198,9 +209,8 @@ def json_object(s_and_begin, encoding, scan_once):
     nextchar = str[idx:idx + 1]
     # Normally we expect nextchar == '"'
     if nextchar != '"':
-        if nextchar in WHITESPACE_STR:
-            white_spaces, idx = match_whitespace(str, idx)
-            nextchar = str[idx:idx + 1]
+        white_spaces, idx = match_whitespace(str, idx)
+        nextchar = str[idx:idx + 1]
         if nextchar == '}':
             pairs = {}
             return pairs, idx + 1
@@ -316,9 +326,9 @@ class JsonDecoder(object):
 
         oldidx = idx
         integer, frac, exp, idx = match_number(string, idx)
-        if integer != '' or frac != '':
-            if frac != '' or exp != '':
-                res = self.parse_float(integer + frac + exp)
+        if integer or frac :
+            if frac or exp:
+                res = self.parse_float((integer or '') + (frac or '') + (exp or ''))
                 if res == float('inf') or res == float('-inf') or res == float('nan'):
                     msg = 'Number out of range: '
                     raise ValueError(errmsg(msg, string, oldidx, idx))
@@ -340,43 +350,43 @@ ESCAPE_Python_2_Json = {
 }
 
 
-def encode_string(pyuni):
+def encode_string(encoding):
     """
     Return a unicode JSON representation of a Python unicode string
     """
+    def _encode(pystr):
+        def replace(pc):
+            try:
+                jc = ESCAPE_Python_2_Json[pc]
+            except KeyError:
+                n = ord(pc)
+                if n < 0x20: # or n > 0x7e
+                    return u'\\u{0:04x}'.format(n)
+                else:
+                    return pc
+            return jc
 
-    def replace(pc):
-        try:
-            jc = ESCAPE_Python_2_Json[pc]
-        except KeyError:
-            n = ord(pc)
-            if n < 0x20: # or n > 0x7e
-                return u'\\u{0:04x}'.format(n)
-            else:
-                return pc
-        return jc
-
-    json_uni = u'"'
-    for pc in pyuni:
-        json_uni += replace(pc)
-    json_uni += u'"'
-    return json_uni
-
+        json_uni = u'"'
+        for pc in pystr:
+            json_uni += replace(pc)
+        json_uni += u'"'
+        return json_uni
+    return _encode
 
 class JsonEncoder(object):
     item_separator = u','
     key_deparator = u':'
 
-    def __init__(self, skipkeys=False, check_circular=True, allow_nan=True, encoding='unicode'):
+    def __init__(self, skipkeys=False, check_circular=True, allow_nan=True, encoding=DEFAULT_ENCODING):
         self.skipkeys = skipkeys
         self.check_circula = check_circular
         self.encoding = encoding
-        self.string_encoder = encode_string
+        self.string_encoder = encode_string(encoding = self.encoding)
         self.allow_nan = allow_nan
 
     def encode(self, o):
-        if not isinstance(o, dict):
-            raise TypeError('Object must be dict')
+        # if not isinstance(o, dict):
+        #     raise TypeError('Object must be dict')
         chunks = self.iter_encode(o)
         if not isinstance(chunks, (list, type)):
             chunks = list(chunks)
@@ -566,6 +576,8 @@ class JsonParser:
         """
         decoder = JsonDecoder(encoding)
         self.__data, end = decoder.scan(s, 0)
+        if end != len(s):
+            raise ValueError(errmsg("Extra data", s, end, len(s)))
 
     def loadJson(self, f, encoding=DEFAULT_ENCODING):
         """
@@ -593,28 +605,27 @@ class JsonParser:
 
     def loadDict(self, d, encoding = DEFAULT_ENCODING):
         self.__data = {}
+        self.encoding = encoding
         for key, value in d.iteritems():
             if isinstance(key, basestring):
-                if encoding != 'unicode':
-                    self.__data[key.decode(encoding)] = value
-                else:
-                    self.__data[key] = value
+                self.__data[key] = value
 
     def dumpDict(self):
-        return dict(self.__data.items)
+        return dict(self.__data.items())
 
     def dict_id(self):
         return id(self.__data)
 
     def __getitem__(self, key):
-        return self[key]
-
-    def __setitem__(self, key, value, encoding = DEFAULT_ENCODING):
         if isinstance(key, basestring):
-            if encoding != 'unicode':
-                self.__data[key.decode(encoding)] = value
-            else:
-                self.__data[key] = value
+            return self.__data[key]
+
+    def __setitem__(self, key, value):
+        if isinstance(key, basestring):
+             self.__data[key] = value
 
     def __repr__(self):
         return repr(self.__data)
+
+    def __str__(self):
+        return str(self.__data)

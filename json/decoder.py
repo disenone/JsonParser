@@ -5,10 +5,12 @@ import sys
 import struct
 
 from json import scanner
-try:
-    from _json import scanstring as c_scanstring
-except ImportError:
-    c_scanstring = None
+# try:
+#     from _json import scanstring as c_scanstring
+# except ImportError:
+#     c_scanstring = None
+
+c_scanstring = None
 
 __all__ = ['JSONDecoder', 'py_scanstring']
 
