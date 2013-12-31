@@ -1,4 +1,7 @@
-[
+
+
+{ "key":
+         [
     "JSON Test Pattern pass1",
     {"object with 1 member":["array with 1 element"]},
     {},
@@ -56,3 +59,4 @@
 1e-1,
 1e00,2e+00,2e-00
 ,"rosebud"]
+}

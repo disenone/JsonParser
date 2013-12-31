@@ -12,6 +12,8 @@ class PyTest(unittest.TestCase):
     dumpJson = pyjson.dumpJson
     loadDict = pyjson.loadDict
     dumpDict = pyjson.dumpDict
+    update = pyjson.update
+    dict_id = pyjson.dict_id
     # def __init__(self):
     #     self.pyjson = JsonParser()
     #     self.load = self.pyjson.load

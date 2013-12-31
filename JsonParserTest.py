@@ -51,7 +51,7 @@ def test_json_load():
     j.load(r'["a\tb"]')
     print j
     print j.dump()
-    print json.loads(r'["\ttabcharacterinstring"]', strict = True)
+    print json.loads(r'"\ttabcharacterinstring"', strict = True)
 
 
 def test_json_loadJson():
@@ -63,11 +63,15 @@ def test_json_loadJson():
     # print jp.loadJson(u"中文_utf8.txt", 'utf8')
     jp.loadJson(u"TestCaseForLoad.txt", 'utf8')
     print 'load from file: ', jp
-    jp.loadJson(u'my_test/test_case/pass1.json')
+    fp = open(u'my_test/test_case/pass3.json')
+    s = fp.read()
+    jp.load(s)
+    print jp
+    jp.loadJson(u'my_test/test_case/pass3.json')
     fp = open("save.txt", mode='w')
     s = jp.dump()
     fp.write(s.encode('utf8'))
-    fp = open(u"TestCaseForLoad.txt")
+    fp = open(u'my_test/test_case/pass3.json')
     print json.load(fp, 'utf8')
 
 def test_json_dump():
@@ -83,18 +87,19 @@ def test_json_dump():
     print jp[u'我']
 
 def test_json_loadDict():
-    data = {u'a' : 1, (1, 2) : 2}
+    d = {'key': [u'key', 123], 'key2':{'a':321}}
     jp = JsonParser()
-    jp.loadDict(data)
-    print jp
+    jp.loadDict(d)
+    print repr(jp)
 
 # test_scan_string()
 # test_white_space_match()
 # test_json_object()
 # test_match_number()
-test_json_load()
-test_json_loadJson()
+# test_json_load()
+# test_json_loadJson()
 # test_json_dump()
 # print JsonParser.__module__
 # import my_test.test_fail
-# test_json_loadDict()
+test_json_loadDict()
+

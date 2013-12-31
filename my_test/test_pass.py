@@ -4,7 +4,7 @@ __author__ = 'lgl'
 
 from __init__ import PyTest
 
-class TestPass(PyTest):
+class TestPass(object):
     def test_success(self):
         file_name = 'test_case/pass'
         idx = 1
@@ -24,7 +24,7 @@ class TestPass(PyTest):
             idx += 1
 
 
-class TestPyFail(TestPass, PyTest): pass
+class TestPyPass(TestPass, PyTest): pass
 
 # if __name__ == '__main__':
 #     unittest.main()

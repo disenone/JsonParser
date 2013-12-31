@@ -3,7 +3,7 @@ __author__ = 'lgl'
 
 from __init__ import PyTest
 
-class TestFail(PyTest):
+class TestFail(object):
     def test_failures(self):
         file_name = 'test_case/fail'
         idx = 1

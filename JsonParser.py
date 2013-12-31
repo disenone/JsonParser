@@ -154,7 +154,7 @@ def match_number(s, idx):
         _int, idx = match_integer(s, idx)
         frac += _int
     # check fraction which only has '.'
-    if not frac:
+    if frac:
         if frac == '.':
             return None, None, None
 
@@ -298,17 +298,21 @@ class JsonDecoder(object):
         self.parse_string = scan_string
 
     def decode(self, s):
-        obj, end = self.scan(s, 0)
+        white_spaces, idx = match_whitespace(s, 0)
+        obj, end = self.scan(s, idx, first = True)
+        white_spaces, end = match_whitespace(s, end)
+        if end != len(s):
+            raise ValueError(errmsg("Extra data", s, end, len(s)))
         return obj, end
 
-    def scan(self, string, idx):
+    def scan(self, string, idx, first = False):
         try:
             nextchar = string[idx]
         except IndexError:
             raise StopIteration
 
-        if idx == 0 and nextchar != '[' and nextchar != '{':
-            msg = 'Expecting "{", "[": '
+        if first and nextchar != '{':
+            msg = 'Expecting "{" at the beginning of json string: '
             raise ValueError(errmsg(msg, string, idx))
 
         if nextchar == '"':
@@ -385,8 +389,6 @@ class JsonEncoder(object):
         self.allow_nan = allow_nan
 
     def encode(self, o):
-        # if not isinstance(o, dict):
-        #     raise TypeError('Object must be dict')
         chunks = self.iter_encode(o)
         if not isinstance(chunks, (list, type)):
             chunks = list(chunks)
@@ -473,7 +475,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                 elif isinstance(value, dict):
                     chunks = _iter_encode_dict(value, _current_indent_level)
                 else:
-                    _iterencode(value, _current_indent_level)
+                    chunks = _iterencode(value, _current_indent_level)
                 for chunk in chunks:
                     yield chunk
         yield u']'
@@ -526,7 +528,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                 elif isinstance(value, dict):
                     chunks = _iter_encode_dict(value, _current_indent_level)
                 else:
-                    raise _iterencode(value, _current_indent_level) #
+                    chunks = _iterencode(value, _current_indent_level) #
                 for chunk in chunks:
                     yield chunk
         yield u'}'
@@ -558,7 +560,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                 if markerid in markers:
                     raise ValueError("Circular reference detected")
                 markers[markerid] = o
-            TypeError(repr(o) + " is not JSON serializable")
+            raise TypeError(repr(o) + " is not JSON serializable")
             for chunk in _iterencode(o, _current_indent_level):
                 yield chunk
             if markers is not None:
@@ -566,27 +568,27 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
 
     return _iterencode
 
+UNICODE_ENCODING = 'unicode'
+
 class JsonParser:
     def __init__(self):
         self.__data = {}
-        self.encoding = 'unicode'
+        self.encoding = UNICODE_ENCODING
     def load(self, s, encoding=DEFAULT_ENCODING):
         """
         load json string, save it as python dict in self.__data
         """
         decoder = JsonDecoder(encoding)
-        self.__data, end = decoder.scan(s, 0)
-        if end != len(s):
-            raise ValueError(errmsg("Extra data", s, end, len(s)))
+        self.__data, end = decoder.decode(s)
 
     def loadJson(self, f, encoding=DEFAULT_ENCODING):
         """
         load json string from file f, save it as python dict in self.__data
         """
         fp = open(f)
-        decoder = JsonDecoder(encoding)
         s = fp.read()
-        self.__data, end = decoder.scan(s, 0)
+        decoder = JsonDecoder(encoding)
+        self.__data, end = decoder.decode(s)
 
     def dump(self):
         """
@@ -603,15 +605,21 @@ class JsonParser:
         encoder = JsonEncoder(encoding = self.encoding)
         fp.write(encoder.encode(self.__data))
 
-    def loadDict(self, d, encoding = DEFAULT_ENCODING):
-        self.__data = {}
-        self.encoding = encoding
+    def update(self, d, encoding = UNICODE_ENCODING):
+        if not isinstance(d, dict):
+            raise ValueError('Input have to be dict')
         for key, value in d.iteritems():
             if isinstance(key, basestring):
-                self.__data[key] = value
+                if encoding != self.encoding:
+                    key = key.decode(encoding)
+                self.__data[key] = deepcopy(value)
+
+    def loadDict(self, d, encoding = UNICODE_ENCODING):
+        self.__data = {}
+        self.update(d, encoding)
 
     def dumpDict(self):
-        return dict(self.__data.items())
+        return deepcopy(self.__data)
 
     def dict_id(self):
         return id(self.__data)
@@ -629,3 +637,61 @@ class JsonParser:
 
     def __str__(self):
         return str(self.__data)
+
+def deepcopy(x, memo=None, _nil=[]):
+
+    if memo is None:
+        memo = {}
+
+    d = id(x)
+    y = memo.get(d, _nil)
+    if y is not _nil:
+        return y
+
+    cls = type(x)
+
+    copier = _deepcopy_dispatch.get(cls)
+    if copier:
+        y = copier(x, memo)
+    else:
+        raise ValueError( "Not support object of type %s" % cls)
+
+    memo[d] = y
+    _keep_alive(x, memo) # Make sure x lives at least as long as d
+    return y
+
+def _keep_alive(x, memo):
+    try:
+        memo[id(memo)].append(x)
+    except KeyError:
+        memo[id(memo)]=[x]
+
+_deepcopy_dispatch = d = {}
+def _deepcopy_atomic(x, memo):
+    return x
+
+def _deepcopy_atomic(x, memo):
+    return x
+d[type(None)] = _deepcopy_atomic
+d[int] = _deepcopy_atomic
+d[long] = _deepcopy_atomic
+d[float] = _deepcopy_atomic
+d[bool] = _deepcopy_atomic
+d[str] = _deepcopy_atomic
+d[unicode] = _deepcopy_atomic
+
+def _deepcopy_list(x, memo):
+    y = []
+    memo[id(x)] = y
+    for a in x:
+        y.append(deepcopy(a, memo))
+    return y
+d[list] = _deepcopy_list
+
+def _deepcopy_dict(x, memo):
+    y = {}
+    memo[id(x)] = y
+    for key, value in x.iteritems():
+        y[deepcopy(key, memo)] = deepcopy(value, memo)
+    return y
+d[dict] = _deepcopy_dict
