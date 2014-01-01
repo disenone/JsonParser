@@ -445,7 +445,7 @@ class JsonEncoder(object):
         _iter_encode = _make_iter_encode(
             markers, str_encoder, floatstr, self.key_deparator, self.item_separator)
 
-        return _iter_encode(o, 0)
+        return _iter_encode(o)
 
 
 def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_separator,
@@ -461,7 +461,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                       str=str,
                       tuple=tuple,
 ):
-    def _iter_encode_list(lst, _current_indent_level):
+    def _iter_encode_list(lst):
         if not lst:
             yield u'[]'
             return
@@ -493,18 +493,18 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
             else:
                 yield buf
                 if isinstance(value, (list, tuple)):
-                    chunks = _iter_encode_list(value, _current_indent_level)
+                    chunks = _iter_encode_list(value)
                 elif isinstance(value, dict):
-                    chunks = _iter_encode_dict(value, _current_indent_level)
+                    chunks = _iter_encode_dict(value)
                 else:
-                    chunks = _iterencode(value, _current_indent_level)
+                    chunks = _iterencode(value)
                 for chunk in chunks:
                     yield chunk
         yield u']'
         if markers is not None:
             del markers[markerid]
 
-    def _iter_encode_dict(dct, _current_indent_level):
+    def _iter_encode_dict(dct):
         if not dct:
             yield u'{}'
             return
@@ -546,18 +546,18 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                 yield _floatstr(value)
             else:
                 if isinstance(value, (list, tuple)):
-                    chunks = _iter_encode_list(value, _current_indent_level)
+                    chunks = _iter_encode_list(value)
                 elif isinstance(value, dict):
-                    chunks = _iter_encode_dict(value, _current_indent_level)
+                    chunks = _iter_encode_dict(value)
                 else:
-                    chunks = _iterencode(value, _current_indent_level) #
+                    chunks = _iterencode(value) #
                 for chunk in chunks:
                     yield chunk
         yield u'}'
         if markers is not None:
             del markers[markerid]
 
-    def _iterencode(o, _current_indent_level):
+    def _iterencode(o):
         if isinstance(o, basestring):
             yield _str_encoder(o)
         elif o is None:
@@ -571,10 +571,10 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
         elif isinstance(o, float):
             yield _floatstr(o)
         elif isinstance(o, (list, tuple)):
-            for chunk in _iter_encode_list(o, _current_indent_level):
+            for chunk in _iter_encode_list(o):
                 yield chunk
         elif isinstance(o, dict):
-            for chunk in _iter_encode_dict(o, _current_indent_level):
+            for chunk in _iter_encode_dict(o):
                 yield chunk
         else:
             if markers is not None:
@@ -582,8 +582,8 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                 if markerid in markers:
                     raise ValueError("Circular reference detected")
                 markers[markerid] = o
-            raise TypeError(repr(o) + " is not JSON serializable")
-            for chunk in _iterencode(o, _current_indent_level):
+            raise ValueError("Type {0} is not support".format(repr(type(o))))
+            for chunk in _iterencode(o):
                 yield chunk
             if markers is not None:
                 del markers[markerid]
