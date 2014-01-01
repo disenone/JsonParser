@@ -1,7 +1,7 @@
 # encoding: utf-8
 __author__ = 'lgl'
 from __init__ import PyTest
-from __init__ import scan_string
+from __init__ import parse_string
 
 UNICODE_CASES = [
     (u'/\\"\ucafe\ubabe\uab98\ufcde\ubcda\uef4a\x08\x0c\n\r\t`1~!@#$%^&*()_+-=[]{}|;:\',./<>?', u'"/\\\\\\"\\ucafe\\ubabe\\uab98\\ufcde\\ubcda\\uef4a\\b\\f\\n\\r\\t`1~!@#$%^&*()_+-=[]{}|;:\',./<>?"'),
@@ -28,14 +28,14 @@ UTF8_CASE = [
 class TestScanString(object):
     def test_encode_unicode(self):
         for expect, input_string in UNICODE_CASES:
-            result, end = scan_string(input_string, 1)
+            result, end = parse_string(input_string, 1)
             self.assertEqual(result, expect,
                 '{0!r} != {1!r} for ({2!r})'.format(
                     result, expect, input_string))
 
     def test_encode_utf8(self):
         for expect, input_string in UTF8_CASE:
-            result, end = scan_string(input_string, 1)
+            result, end = parse_string(input_string, 1)
             self.assertEqual(result, expect,
                 '{0!r} != {1!r} for ({2!r})'.format(
                     result, expect, input_string))

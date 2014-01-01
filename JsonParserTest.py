@@ -2,15 +2,15 @@
 
 from JsonParser import JsonParser
 from JsonParser import match_string
-from JsonParser import scan_string
+from JsonParser import parse_json_string
 from JsonParser import match_whitespace
 from json import decoder
 import json
 
 def test_scan_string():
     #print matchString('"d"', 1)
-    print scan_string('"da sdf"', 1)
-    print scan_string('"da sdf\u1234\f\b\n\x21"', 1)
+    print parse_json_string('"da sdf"', 1)
+    print parse_json_string('"da sdf\u1234\f\b\n\x21"', 1)
     print '-------------------------'
     print decoder.py_scanstring('"das df\u1234\f\b\n\x21"', 1, strict = False)
 
@@ -26,12 +26,12 @@ def test_white_space_match():
     print repr(white_space), end
 #test_scan_string()
 
-from JsonParser import json_object
+from JsonParser import parse_json_object
 from JsonParser import JsonDecoder
 from json import scanner
 def test_json_object():
     jd = JsonDecoder()
-    pairs, end = json_object(('"abc":213}', 0), 'utf-8', jd.scan)
+    pairs, end = parse_json_object(('"abc":213}', 0), 'utf-8', jd.scan_json)
     print pairs, type(pairs)
     jd = decoder.JSONDecoder()
     pairs, end = decoder.JSONObject(('"abc":213}', 0), 'utf-8', scan_once = jd.scan_once, strict=False, object_hook=None, object_pairs_hook=None)
@@ -95,12 +95,12 @@ def test_json_loadDict():
     print jp['您key']
 
 from JsonParser import has_utf8_char
-from JsonParser import encode_string
+from JsonParser import encode_python_string
 def test_utf8_char():
     print has_utf8_char('您好')
     print has_utf8_char('您好')
     print has_utf8_char(u'asdfas')
-    encode_string_utf8 = encode_string('utf8')
+    encode_string_utf8 = encode_python_string('utf8')
     encode_string_utf8('\xce\xb1\xce\xa9')
 
 def test_check_circular():

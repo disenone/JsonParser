@@ -39,6 +39,8 @@ FLOAT_CONSTANTS = {
     'NaN': NAN,
 }
 
+NUMBER = '0123456789'
+
 BACKSLASH = {
     '"': u'"', '\\': u'\\', '/': u'/',
     'b': u'\b', 'f': u'\f', 'n': u'\n', 'r': u'\r', 't': u'\t',
@@ -48,19 +50,38 @@ CONTROL_CHAR = [
     '\b', '\f', '\n', '\r', '\t'
 ]
 
-# supported encoding
+WHITESPACE_STR = ' \t\n\r'
+
+ESCAPE_Python_2_Json = {
+    u'\\': u'\\\\',
+    u'"': u'\\"',
+    u'\b': u'\\b',
+    u'\f': u'\\f',
+    u'\n': u'\\n',
+    u'\r': u'\\r',
+    u'\t': u'\\t',
+}
+
+# predefined encoding
 DEFAULT_ENCODING = "utf-8"
 UNICODE_ENCODING = 'unicode'
 
 def has_utf8_char(s):
+    """
+    simply check if s has utf8 char
+    """
     for c in s:
-        if c <= '\x7f':
-            continue
-        if c >= '\x80' and c <= '\xff':
+        i = ord(c)
+        if i > 0x80 and i <= 0xff:
             return True
     return False
 
 def convert_str_2_unicode(s, encoding = UNICODE_ENCODING):
+    """
+    convert a str to unicode, if encoding is given, will try to decode the str by the given encoding
+    it will also guess if the string is utf8
+    if fail to convert the string, it will just return u''
+    """
     if isinstance(s, str):
         if encoding != UNICODE_ENCODING:
             s = s.decode(encoding)
@@ -73,22 +94,22 @@ def convert_str_2_unicode(s, encoding = UNICODE_ENCODING):
     return u''
 
 def match_string(s, idx):
-    """ match [", \, /, \f, \b, \n, \r, \t, \u, chars] from s[end], return match string
+    """
+    match [", \, /, \f, \b, \n, \r, \t, \u, chars] begin at s[idx], return matched string
+    for a string s = '"abc"', idx should not less than 1, which is the position of 'a',
+    or the function will return u'' for nothing found
     """
     # catch index error
     try:
         char = ""
         if s[idx] == '"':
             # reach the end of the string
-            return (u'', idx + 1)
+            return (None, idx + 1)
         elif s[idx] == '\\':
             # find backslash
             idx += 1;
-            # if s[idx] == '/':
-            #     # json:"\/" -> python: '/'
-            #     return (BACKSLASH['/'], idx + 1)
             if s[idx] == 'u':
-                # json \uxxxx
+                # find json \uxxxx
                 nums = s[idx + 1: idx + 5]
                 next_end = idx + 5
                 if len(nums) != 4:
@@ -106,14 +127,11 @@ def match_string(s, idx):
                     raise ValueError(errmsg(msg, s, idx))
                 return (char, idx + 1)
         elif s[idx] > '\x1f':
-            # find normal char
+            # find normal chars
             while s[idx] != '"' and s[idx] != '\\' and s[idx] > '\x1f':
                 char += s[idx]
                 idx += 1
             return (unicode(char), idx)
-        # elif s[idx] in CONTROL_CHAR:
-        #     # find control char
-        #     return s[idx].decode(encoding), idx + 1
         else:
             # others invalid char
             msg = "Invalid control character {0!r} at".format(s[idx])
@@ -122,22 +140,24 @@ def match_string(s, idx):
         raise ValueError(errmsg("Unterminated string starting at", s, idx - 1))
 
 
-def scan_string(s, idx, encoding=DEFAULT_ENCODING):
+def parse_json_string(s, idx, encoding=DEFAULT_ENCODING):
+    """
+    Return a unicode Python representation of a Json string
+    """
     trunks = []
     _append = trunks.append;
     s = convert_str_2_unicode(s, encoding)
     while True:
         ustr, idx = match_string(s, idx)
-        if ustr == u'':
+        if not ustr:
             break
         _append(ustr)
     return u''.join(trunks), idx
 
-
-NUMBER = '0123456789'
-
-
 def match_integer(s, idx):
+    """
+    greedily match integer of [0123456789]
+    """
     integer = ''
     nextchar = s[idx:idx + 1]
     while nextchar != '' and nextchar in NUMBER:
@@ -148,6 +168,9 @@ def match_integer(s, idx):
 
 
 def match_number(s, idx):
+    """
+    match a valid number of int or float
+    """
     integer = None
     frac = None
     exp = None
@@ -203,11 +226,10 @@ def match_number(s, idx):
 
     return integer, frac, exp, idx
 
-
-WHITESPACE_STR = ' \t\n\r'
-
-
 def match_whitespace(s, idx):
+    """
+    greedily match white spaces, return white spaces matched and index follows
+    """
     white_space = ''
     length = len(s)
     if idx >= length:
@@ -220,7 +242,10 @@ def match_whitespace(s, idx):
     return white_space, idx
 
 
-def json_object(s_and_begin, encoding, scan_once):
+def parse_json_object(s_and_begin, encoding, scan_json):
+    """
+    parse Json object into Python dict, return the dict and string index follows
+    """
     str, idx = s_and_begin
     pairs = []
     pairs_append = pairs.append
@@ -241,7 +266,7 @@ def json_object(s_and_begin, encoding, scan_once):
     idx += 1
 
     while True:
-        key, idx = scan_string(str, idx, encoding)
+        key, idx = parse_json_string(str, idx, encoding)
 
         if str[idx:idx + 1] != ':':
             white_spaces, idx = match_whitespace(str, idx)
@@ -254,14 +279,14 @@ def json_object(s_and_begin, encoding, scan_once):
         white_spaces, idx = match_whitespace(str, idx)
 
         try:
-            value, idx = scan_once(str, idx)
+            value, idx = scan_json(str, idx)
         except StopIteration:
             raise ValueError(errmsg("Expecting object", str, idx))
         pairs_append((key, value))
 
-        # check for the next key:value or end of object
         white_spaces, idx = match_whitespace(str, idx)
 
+        # check for the next key:value or end of object
         nextchar = str[idx:idx + 1]
         idx += 1
         if nextchar == '}':
@@ -271,6 +296,7 @@ def json_object(s_and_begin, encoding, scan_once):
 
         white_spaces, idx = match_whitespace(str, idx)
 
+        # check for a singleton ',', a ',' should be followed by a Json string
         nextchar = str[idx:idx + 1]
         if nextchar != '"':
             raise ValueError(errmsg("Expecting property name", str, idx - 1))
@@ -279,7 +305,7 @@ def json_object(s_and_begin, encoding, scan_once):
     return pairs, idx
 
 
-def json_array(s_and_begin, scan_once):
+def parse_json_array(s_and_begin, scan_json):
     str, idx = s_and_begin
     values = []
     white_spaces, idx = match_whitespace(str, idx)
@@ -292,7 +318,7 @@ def json_array(s_and_begin, scan_once):
 
     while True:
         try:
-            value, idx = scan_once(str, idx)
+            value, idx = scan_json(str, idx)
         except StopIteration:
             raise ValueError(errmsg("Expecting object", str, idx))
         _append(value)
@@ -313,22 +339,21 @@ class JsonDecoder(object):
         self.encoding = encoding
         self.parse_float = float
         self.parse_int = int
-        self.parse_constant = FLOAT_CONSTANTS.__getitem__
-        self.parse_object = json_object
-        self.parse_array = json_array
-        self.parse_string = scan_string
+        self.parse_object = parse_json_object
+        self.parse_array = parse_json_array
+        self.parse_string = parse_json_string
 
     def decode(self, s):
         if not isinstance(s, (str, unicode)):
             raise ValueError("Input must be str or unicode, (type {0} is given).".format(type(s)))
         white_spaces, idx = match_whitespace(s, 0)
-        obj, end = self.scan(s, idx, first = True)
+        obj, end = self.scan_json(s, idx, first = True)
         white_spaces, end = match_whitespace(s, end)
         if end != len(s):
             raise ValueError(errmsg("Extra data", s, end, len(s)))
         return obj, end
 
-    def scan(self, string, idx, first = False):
+    def scan_json(self, string, idx, first = False):
         try:
             nextchar = string[idx]
         except IndexError:
@@ -341,9 +366,9 @@ class JsonDecoder(object):
         if nextchar == '"':
             return self.parse_string(string, idx + 1, self.encoding)
         elif nextchar == '{':
-            return self.parse_object((string, idx + 1), self.encoding, self.scan)
+            return self.parse_object((string, idx + 1), self.encoding, self.scan_json)
         elif nextchar == '[':
-            return self.parse_array((string, idx + 1), self.scan)
+            return self.parse_array((string, idx + 1), self.scan_json)
         elif nextchar == 'n' and string[idx:idx + 4] == 'null':
             return None, idx + 4
         elif nextchar == 't' and string[idx:idx + 4] == 'true':
@@ -365,19 +390,7 @@ class JsonDecoder(object):
         else:
             raise StopIteration
 
-
-ESCAPE_Python_2_Json = {
-    u'\\': u'\\\\',
-    u'"': u'\\"',
-    u'\b': u'\\b',
-    u'\f': u'\\f',
-    u'\n': u'\\n',
-    u'\r': u'\\r',
-    u'\t': u'\\t',
-}
-
-
-def encode_string(encoding = UNICODE_ENCODING):
+def encode_python_string(encoding = UNICODE_ENCODING):
     """
     Return a unicode JSON representation of a Python unicode string
     """
@@ -406,9 +419,16 @@ class JsonEncoder(object):
     key_deparator = u':'
 
     def __init__(self, check_circular=True, allow_nan=False, encoding=UNICODE_ENCODING):
+        """
+        If check_circular is true, then lists, dicts, and custom encoded
+        objects will be checked for circular references during encoding to
+        prevent an infinite recursion (which would cause an OverflowError).
+        Otherwise, no such check takes place.
+
+        """
         self.check_circular = check_circular
         self.encoding = encoding
-        self.string_encoder = encode_string(encoding = self.encoding)
+        self.string_encoder = encode_python_string(encoding = self.encoding)
         self.allow_nan = allow_nan
 
     def encode(self, o):
@@ -460,7 +480,6 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                       list=list,
                       long=long,
                       str=str,
-                      tuple=tuple,
 ):
     def _iter_encode_list(lst):
         if not lst:
@@ -494,7 +513,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                 yield buf + _floatstr(value)
             else:
                 yield buf
-                if isinstance(value, (list, tuple)):
+                if isinstance(value, list):
                     chunks = _iter_encode_list(value)
                 elif isinstance(value, dict):
                     chunks = _iter_encode_dict(value)
@@ -547,7 +566,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
             elif isinstance(value, float):
                 yield _floatstr(value)
             else:
-                if isinstance(value, (list, tuple)):
+                if isinstance(value, list):
                     chunks = _iter_encode_list(value)
                 elif isinstance(value, dict):
                     chunks = _iter_encode_dict(value)
@@ -572,7 +591,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
             yield str(o)
         elif isinstance(o, float):
             yield _floatstr(o)
-        elif isinstance(o, (list, tuple)):
+        elif isinstance(o, list):
             for chunk in _iter_encode_list(o):
                 yield chunk
         elif isinstance(o, dict):
