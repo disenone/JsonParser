@@ -4,6 +4,10 @@ __author__ = 'lgl'
 import JsonParser
 import unittest
 
+encode_string_utf8 = JsonParser.encode_string('utf8')
+encode_string_unicode = JsonParser.encode_string()
+scan_string = JsonParser.scan_string
+
 class PyTest(unittest.TestCase):
     pyjson = JsonParser.JsonParser()
     load = pyjson.load

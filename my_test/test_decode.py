@@ -1,7 +1,6 @@
 # encoding: utf8
 __author__ = 'lgl'
 
-import decimal
 from __init__ import PyTest
 
 class TestDecode(object):
@@ -24,12 +23,6 @@ class TestDecode(object):
         d = self.dumpDict()
         self.assertEqual(d, {})
 
-    def test_deep_copy(self):
-        d = {'key': [u'key', 123], 'key2':{'a':321}}
-        self.loadDict(d)
-        self.assertNotEqual(id(d), self.dict_id())
-        self.assertNotEqual(id(d['key2']), self.dumpDict()['key2'])
-        self.assertNotEqual(id(d['key']), self.dumpDict()['key'])
 
 class TestPyDecode(TestDecode, PyTest): pass
 

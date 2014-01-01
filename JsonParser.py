@@ -49,9 +49,29 @@ CONTROL_CHAR = [
 ]
 
 DEFAULT_ENCODING = "utf-8"
+UNICODE_ENCODING = 'unicode'
 
+def has_utf8_char(s):
+    for c in s:
+        if c <= '\x7f':
+            continue
+        if c >= '\x80' and c <= '\xff':
+            return True
+    return False
 
-def match_string(s, idx, encoding=DEFAULT_ENCODING):
+def convert_str_2_unicode(s, encoding = UNICODE_ENCODING):
+    if isinstance(s, str):
+        if encoding != UNICODE_ENCODING:
+            s = s.decode(encoding)
+        elif has_utf8_char(s):
+            s = s.decode('utf8')
+        else:
+            s = unicode(s)
+    if isinstance(s, unicode):
+        return s
+    return u''
+
+def match_string(s, idx):
     """ match [", \, /, \f, \b, \n, \r, \t, \u, chars] from s[end], return match string
     """
     # catch index error
@@ -89,7 +109,7 @@ def match_string(s, idx, encoding=DEFAULT_ENCODING):
             while s[idx] != '"' and s[idx] != '\\' and s[idx] > '\x1f':
                 char += s[idx]
                 idx += 1
-            return (unicode(char, encoding), idx)
+            return (unicode(char), idx)
         # elif s[idx] in CONTROL_CHAR:
         #     # find control char
         #     return s[idx].decode(encoding), idx + 1
@@ -104,7 +124,7 @@ def match_string(s, idx, encoding=DEFAULT_ENCODING):
 def scan_string(s, idx, encoding=DEFAULT_ENCODING):
     trunks = []
     _append = trunks.append;
-    idx = idx
+    s = convert_str_2_unicode(s, encoding)
     while True:
         ustr, idx = match_string(s, idx)
         if ustr == u'':
@@ -298,6 +318,8 @@ class JsonDecoder(object):
         self.parse_string = scan_string
 
     def decode(self, s):
+        if not isinstance(s, (str, unicode)):
+            raise ValueError("Input must be str or unicode, (type {0} is given).".format(type(s)))
         white_spaces, idx = match_whitespace(s, 0)
         obj, end = self.scan(s, idx, first = True)
         white_spaces, end = match_whitespace(s, end)
@@ -354,7 +376,7 @@ ESCAPE_Python_2_Json = {
 }
 
 
-def encode_string(encoding):
+def encode_string(encoding = UNICODE_ENCODING):
     """
     Return a unicode JSON representation of a Python unicode string
     """
@@ -364,12 +386,13 @@ def encode_string(encoding):
                 jc = ESCAPE_Python_2_Json[pc]
             except KeyError:
                 n = ord(pc)
-                if n < 0x20: # or n > 0x7e
+                if n < 0x20 or n > 0x7e:
                     return u'\\u{0:04x}'.format(n)
                 else:
                     return pc
             return jc
 
+        pystr = convert_str_2_unicode(pystr, encoding)
         json_uni = u'"'
         for pc in pystr:
             json_uni += replace(pc)
@@ -381,9 +404,8 @@ class JsonEncoder(object):
     item_separator = u','
     key_deparator = u':'
 
-    def __init__(self, skipkeys=False, check_circular=True, allow_nan=True, encoding=DEFAULT_ENCODING):
-        self.skipkeys = skipkeys
-        self.check_circula = check_circular
+    def __init__(self, check_circular=True, allow_nan=False, encoding=UNICODE_ENCODING):
+        self.check_circular = check_circular
         self.encoding = encoding
         self.string_encoder = encode_string(encoding = self.encoding)
         self.allow_nan = allow_nan
@@ -395,12 +417,12 @@ class JsonEncoder(object):
         return u''.join(chunks)
 
     def iter_encode(self, o):
-        if self.check_circula:
+        if self.check_circular:
             markers = {}
         else:
             markers = None
         str_encoder = self.string_encoder
-        if self.encoding != DEFAULT_ENCODING:
+        if self.encoding != UNICODE_ENCODING:
             def str_encoder(o, _orig_encoder=str_encoder, encoding=self.encoding):
                 if isinstance(o, str):
                     o = o.decode(encoding)
@@ -421,12 +443,12 @@ class JsonEncoder(object):
             return text
 
         _iter_encode = _make_iter_encode(
-            markers, str_encoder, floatstr, self.key_deparator, self.item_separator, self.skipkeys)
+            markers, str_encoder, floatstr, self.key_deparator, self.item_separator)
 
         return _iter_encode(o, 0)
 
 
-def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_separator, _skipkeys,
+def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_separator,
                       ValueError=ValueError,
                       basestring=basestring,
                       dict=dict,
@@ -568,8 +590,6 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
 
     return _iterencode
 
-UNICODE_ENCODING = 'unicode'
-
 class JsonParser:
     def __init__(self):
         self.__data = {}
@@ -585,8 +605,8 @@ class JsonParser:
         """
         load json string from file f, save it as python dict in self.__data
         """
-        fp = open(f)
-        s = fp.read()
+        with open(f) as fp:
+            s = fp.read()
         decoder = JsonDecoder(encoding)
         self.__data, end = decoder.decode(s)
 
@@ -597,21 +617,20 @@ class JsonParser:
         encoder = JsonEncoder(encoding = self.encoding)
         return encoder.encode(self.__data)
 
-    def dumpJson(self, f, encoding = DEFAULT_ENCODING):
+    def dumpJson(self, f, encoding = UNICODE_ENCODING):
         """
         save json string base on dict self.__data into file f
         """
-        fp = open(f)
-        encoder = JsonEncoder(encoding = self.encoding)
-        fp.write(encoder.encode(self.__data))
+        with open(f) as fp:
+            encoder = JsonEncoder(encoding = self.encoding)
+            fp.write(encoder.encode(self.__data))
 
     def update(self, d, encoding = UNICODE_ENCODING):
         if not isinstance(d, dict):
-            raise ValueError('Input have to be dict')
+            raise ValueError('Input must be dict, (type {0} is given).'.format(type(d)))
         for key, value in d.iteritems():
             if isinstance(key, basestring):
-                if encoding != self.encoding:
-                    key = key.decode(encoding)
+                key = convert_str_2_unicode(key, encoding)
                 self.__data[key] = deepcopy(value)
 
     def loadDict(self, d, encoding = UNICODE_ENCODING):
@@ -625,12 +644,13 @@ class JsonParser:
         return id(self.__data)
 
     def __getitem__(self, key):
-        if isinstance(key, basestring):
-            return self.__data[key]
+        key = convert_str_2_unicode(key)
+        return self.__data[key]
 
     def __setitem__(self, key, value):
         if isinstance(key, basestring):
-             self.__data[key] = value
+            key = convert_str_2_unicode(key)
+            self.__data[key] = value
 
     def __repr__(self):
         return repr(self.__data)

@@ -87,12 +87,48 @@ def test_json_dump():
     print jp[u'我']
 
 def test_json_loadDict():
-    d = {'key': [u'key', 123], 'key2':{'a':321}}
+    d = {'您key': [u'key', 123], 'key2':{'a':321}}
     jp = JsonParser()
     jp.loadDict(d)
     print repr(jp)
+    print repr(jp.dump())
+    print jp['您key']
 
-# test_scan_string()
+from JsonParser import has_utf8_char
+from JsonParser import encode_string
+def test_utf8_char():
+    print has_utf8_char('您好')
+    print has_utf8_char('您好')
+    print has_utf8_char(u'asdfas')
+    encode_string_utf8 = encode_string('utf8')
+    encode_string_utf8('\xce\xb1\xce\xa9')
+
+def test_check_circular():
+    x = []
+    x.append(x)
+    d = {'x': x}
+    jp = JsonParser()
+    jp.loadDict(d)
+    jp.dump()
+
+def test_float_out_of_range():
+    jp = JsonParser()
+    jp.loadJson('my_test/test_case/fail35.json')
+    print jp
+    print jp.dump()
+
+JSON = r'{ "abc":[[[[[[[[[[[[[[[[[[["Not too deep"]]]]]]]]]]]]]]]]]]] }'
+def test_parse():
+    jp = JsonParser()
+    jp.load(JSON)
+    out = jp.dump()
+    print repr(out)
+    d1 = jp.dumpDict()
+    jp.load(out)
+    d2 = jp.dumpDict()
+    print d1==d2
+
+# test_scan_string()s
 # test_white_space_match()
 # test_json_object()
 # test_match_number()
@@ -101,5 +137,8 @@ def test_json_loadDict():
 # test_json_dump()
 # print JsonParser.__module__
 # import my_test.test_fail
-test_json_loadDict()
-
+# test_json_loadDict()
+# test_utf8_char()
+# test_check_circular()
+# test_float_out_of_range()
+# test_parse()

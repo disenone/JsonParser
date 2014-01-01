@@ -11,9 +11,11 @@ class TestFail(object):
             try:
                 name = file_name + str(idx) + '.json'
                 fp = open(name)
+                s = fp.read()
             except IOError:
                 break #self.fail("open fail: "+name)
-            s = fp.read()
+            finally:
+                fp.close()
             try:
                 self.load(s)
             except ValueError:
@@ -27,6 +29,12 @@ class TestFail(object):
         self.loadDict(data)
         d = self.dumpDict()
         self.assertEqual(d, {'a':1})
+
+    def test_float_out_of_range(self):
+        d = {"23456789012E666 should be out of range":  23456789012E666}
+        self.loadDict(d)
+        self.assertRaises(ValueError, self.dump)
+
 
 class TestPyFail(TestFail, PyTest): pass
 
