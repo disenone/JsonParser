@@ -34,7 +34,12 @@ class TestFail(object):
         d = {"23456789012E666 should be out of range":  23456789012E666}
         self.loadDict(d)
         self.assertRaises(ValueError, self.dump)
-
+        d = {"nan should be out of range":  float('nan')}
+        self.loadDict(d)
+        self.assertRaises(ValueError, self.dump)
+        d = {"-23456789012E666 should be out of range":  -23456789012E666}
+        self.loadDict(d)
+        self.assertRaises(ValueError, self.dump)
 
 class TestPyFail(TestFail, PyTest): pass
 

@@ -335,7 +335,15 @@ def parse_json_array(s_and_begin, scan_json):
 
 
 class JsonDecoder(object):
+    """
+    parse Json string into Python dict
+    """
     def __init__(self, encoding=DEFAULT_ENCODING):
+        """
+        encoding determines the encoding used to interpret any ``str``
+        objects representing Json string of decoded by this instance (utf-8 by default).
+        It has no effect when decoding ``unicode`` objects.
+        """
         self.encoding = encoding
         self.parse_float = float
         self.parse_int = int
@@ -418,18 +426,20 @@ class JsonEncoder(object):
     item_separator = u','
     key_deparator = u':'
 
-    def __init__(self, check_circular=True, allow_nan=False, encoding=UNICODE_ENCODING):
+    def __init__(self, check_circular=True, encoding=UNICODE_ENCODING):
         """
         If check_circular is true, then lists, dicts, and custom encoded
         objects will be checked for circular references during encoding to
         prevent an infinite recursion (which would cause an OverflowError).
         Otherwise, no such check takes place.
 
+        encoding, all input strings of self.__data will be
+        transformed into unicode using that encoding prior to JSON-encoding.
+        The default is UTF-8.
         """
         self.check_circular = check_circular
         self.encoding = encoding
         self.string_encoder = encode_python_string(encoding = self.encoding)
-        self.allow_nan = allow_nan
 
     def encode(self, o):
         chunks = self.iter_encode(o)
@@ -449,19 +459,12 @@ class JsonEncoder(object):
                     o = o.decode(encoding)
                 return _orig_encoder(o)
 
-        def floatstr(o, allow_nan=self.allow_nan, _inf=INFINITY, _neginf=NEG_INFINITY):
-            if o != o:
-                text = u'NaN'
-            elif o == _inf:
-                text = u'Infinity'
-            elif o == _neginf:
-                text = u'-Infinity'
-            else:
-                return repr(o).decode(DEFAULT_ENCODING)
-            if not allow_nan:
+        def floatstr(o, _inf=INFINITY, _neginf=NEG_INFINITY):
+            if o != o  or o == _inf or o == _neginf:
                 raise ValueError("Out of range float values are not JSON compliant: " +
                                  repr(o))
-            return text
+            else:
+                return repr(o).decode(DEFAULT_ENCODING)
 
         _iter_encode = _make_iter_encode(
             markers, str_encoder, floatstr, self.key_deparator, self.item_separator)
@@ -485,6 +488,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
         if not lst:
             yield u'[]'
             return
+        # check circular
         if markers is not None:
             markerid = id(lst)
             if markerid in markers:
@@ -497,8 +501,8 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
             if first:
                 first = False
             else:
-                buf =  separator
-
+                buf = separator
+            # encode value into Json
             if isinstance(value, basestring):
                 yield buf + _str_encoder(value)
             elif value is None:
@@ -529,6 +533,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
         if not dct:
             yield u'{}'
             return
+        # check circular
         if markers is not None:
             markerid = id(dct)
             if markerid in markers:
@@ -548,7 +553,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
             if first:
                 first = False
             else:
-                yield  item_separator
+                yield item_separator
             yield _str_encoder(key)
             yield _key_separator
 
@@ -605,13 +610,13 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
 class JsonParser:
     def __init__(self, encoding=DEFAULT_ENCODING):
         """
-        If encoding is not None, then all input strings will be
+        encoding, all input strings of self.__data will be
         transformed into unicode using that encoding prior to JSON-encoding.
         The default is UTF-8.
 
         encoding also determines the encoding used to interpret any ``str``
-        objects decoded by this instance (utf-8 by default).  It has no
-        effect when decoding ``unicode`` objects.
+        objects representing Json string of decoded by this instance (utf-8 by default).
+        It has no effect when decoding ``unicode`` objects.
         """
         self.__data = {}
         self.encoding = encoding
@@ -651,6 +656,10 @@ class JsonParser:
             fp.write(encoder.encode(self.__data))
 
     def update(self, d):
+        """
+        update self.__data by another dict, use deepcopy
+        only keys of str or unicode will be concerned, other type of object will be ignored
+        """
         if not isinstance(d, dict):
             raise ValueError('Input must be dict, (type {0} is given).'.format(type(d)))
         for key, value in d.iteritems():
@@ -658,20 +667,34 @@ class JsonParser:
                 self.__data[key] = deepcopy(value)
 
     def loadDict(self, d):
+        """
+        deep copy a dict into self.__data
+        """
         self.__data = {}
         self.update(d)
 
     def dumpDict(self):
+        """
+        return a Python dict, deepcopy of self.__data
+        """
         return deepcopy(self.__data)
 
     def dict_id(self):
+        """
+        get the object id of self.__data
+        """
         return id(self.__data)
 
     def __getitem__(self, key):
-        # key = convert_str_2_unicode(key)
+        """
+        method like dict, return value of key
+        """
         return self.__data[key]
 
     def __setitem__(self, key, value):
+        """
+        set value of key, if not exist, create one
+        """
         if isinstance(key, basestring):
             key = convert_str_2_unicode(key)
             self.__data[key] = value
@@ -682,7 +705,11 @@ class JsonParser:
     def __str__(self):
         return str(self.__data)
 
+
 def deepcopy(x, memo=None, _nil=[]):
+    """
+    make a deep copy of object x
+    """
 
     if memo is None:
         memo = {}
@@ -710,12 +737,15 @@ def _keep_alive(x, memo):
     except KeyError:
         memo[id(memo)]=[x]
 
+# a dict to remember types which can be deep copied
 _deepcopy_dispatch = d = {}
-def _deepcopy_atomic(x, memo):
-    return x
 
 def _deepcopy_atomic(x, memo):
     return x
+
+"""
+only [None, int, long, float, bool, str, unicode, list, dict] can be deep copied
+"""
 d[type(None)] = _deepcopy_atomic
 d[int] = _deepcopy_atomic
 d[long] = _deepcopy_atomic
