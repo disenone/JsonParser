@@ -67,11 +67,11 @@ def test_json_loadJson():
     s = fp.read()
     jp.load(s)
     print jp
-    jp.loadJson(u'my_test/test_case/pass3.json')
+    jp.loadJson(u'json_test/test_case/pass3.json')
     fp = open("save.txt", mode='w')
     s = jp.dump()
     fp.write(s.encode('utf8'))
-    fp = open(u'my_test/test_case/pass3.json')
+    fp = open(u'json_test/test_case/pass3.json')
     print json.load(fp, 'utf8')
 
 def test_json_dump():
@@ -113,7 +113,7 @@ def test_check_circular():
 
 def test_float_out_of_range():
     jp = JsonParser()
-    jp.loadJson('my_test/test_case/fail35.json')
+    jp.loadJson('json_test/test_case/fail35.json')
     print jp
     print jp.dump()
 

@@ -11,7 +11,5 @@ class TestIO(object):
             pass
         else:
             self.fail("Except failure in opening file: {0}".format(fn))
-        with self.assertRaises(IOError):
-            self.dumpJson(fn)
 
 class TestPyIO(TestIO, PyTest): pass

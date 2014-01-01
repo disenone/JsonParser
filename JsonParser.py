@@ -27,7 +27,7 @@ def errmsg(msg, doc, pos, end=None):
     #return fmt % (msg, lineno, colno, endlineno, endcolno, pos, end)
 
 
-__all__ = ['JsonParser', 'scanString', 'matchString']
+__all__ = ['JsonParser']
 
 INFINITY = float('inf')
 NEG_INFINITY = float('-inf')
@@ -48,6 +48,7 @@ CONTROL_CHAR = [
     '\b', '\f', '\n', '\r', '\t'
 ]
 
+# supported encoding
 DEFAULT_ENCODING = "utf-8"
 UNICODE_ENCODING = 'unicode'
 
@@ -477,7 +478,8 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
             if first:
                 first = False
             else:
-                buf = separator
+                buf =  separator
+
             if isinstance(value, basestring):
                 yield buf + _str_encoder(value)
             elif value is None:
@@ -497,7 +499,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                 elif isinstance(value, dict):
                     chunks = _iter_encode_dict(value)
                 else:
-                    chunks = _iterencode(value)
+                    raise ValueError("Type {0} is not support".format(repr(type(o))))
                 for chunk in chunks:
                     yield chunk
         yield u']'
@@ -550,7 +552,7 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
                 elif isinstance(value, dict):
                     chunks = _iter_encode_dict(value)
                 else:
-                    chunks = _iterencode(value) #
+                    raise ValueError("Type {0} is not support".format(repr(type(o))))
                 for chunk in chunks:
                     yield chunk
         yield u'}'
@@ -577,37 +579,41 @@ def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_se
             for chunk in _iter_encode_dict(o):
                 yield chunk
         else:
-            if markers is not None:
-                markerid = id(o)
-                if markerid in markers:
-                    raise ValueError("Circular reference detected")
-                markers[markerid] = o
             raise ValueError("Type {0} is not support".format(repr(type(o))))
-            for chunk in _iterencode(o):
-                yield chunk
-            if markers is not None:
-                del markers[markerid]
 
     return _iterencode
 
 class JsonParser:
-    def __init__(self):
+    def __init__(self, encoding=DEFAULT_ENCODING):
+        """
+        If encoding is not None, then all input strings will be
+        transformed into unicode using that encoding prior to JSON-encoding.
+        The default is UTF-8.
+
+        encoding also determines the encoding used to interpret any ``str``
+        objects decoded by this instance (utf-8 by default).  It has no
+        effect when decoding ``unicode`` objects.
+        """
         self.__data = {}
-        self.encoding = UNICODE_ENCODING
-    def load(self, s, encoding=DEFAULT_ENCODING):
+        self.encoding = encoding
+    def load(self, s):
         """
         load json string, save it as python dict in self.__data
         """
-        decoder = JsonDecoder(encoding)
+        if not isinstance(s, basestring):
+            raise ValueError("Input must be str or unicode, (type {0} is given).".format(type(s)))
+        decoder = JsonDecoder(self.encoding)
+        s = convert_str_2_unicode(s, self.encoding)
         self.__data, end = decoder.decode(s)
 
-    def loadJson(self, f, encoding=DEFAULT_ENCODING):
+    def loadJson(self, f):
         """
         load json string from file f, save it as python dict in self.__data
         """
         with open(f) as fp:
             s = fp.read()
-        decoder = JsonDecoder(encoding)
+        s = convert_str_2_unicode(s, self.encoding)
+        decoder = JsonDecoder(self.encoding)
         self.__data, end = decoder.decode(s)
 
     def dump(self):
@@ -617,25 +623,24 @@ class JsonParser:
         encoder = JsonEncoder(encoding = self.encoding)
         return encoder.encode(self.__data)
 
-    def dumpJson(self, f, encoding = UNICODE_ENCODING):
+    def dumpJson(self, f):
         """
         save json string base on dict self.__data into file f
         """
-        with open(f) as fp:
+        with open(f, 'w') as fp:
             encoder = JsonEncoder(encoding = self.encoding)
             fp.write(encoder.encode(self.__data))
 
-    def update(self, d, encoding = UNICODE_ENCODING):
+    def update(self, d):
         if not isinstance(d, dict):
             raise ValueError('Input must be dict, (type {0} is given).'.format(type(d)))
         for key, value in d.iteritems():
             if isinstance(key, basestring):
-                key = convert_str_2_unicode(key, encoding)
                 self.__data[key] = deepcopy(value)
 
-    def loadDict(self, d, encoding = UNICODE_ENCODING):
+    def loadDict(self, d):
         self.__data = {}
-        self.update(d, encoding)
+        self.update(d)
 
     def dumpDict(self):
         return deepcopy(self.__data)
@@ -644,7 +649,7 @@ class JsonParser:
         return id(self.__data)
 
     def __getitem__(self, key):
-        key = convert_str_2_unicode(key)
+        # key = convert_str_2_unicode(key)
         return self.__data[key]
 
     def __setitem__(self, key, value):

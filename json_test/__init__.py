@@ -10,6 +10,7 @@ scan_string = JsonParser.scan_string
 
 class PyTest(unittest.TestCase):
     pyjson = JsonParser.JsonParser()
+    pyjson_gbk = JsonParser.JsonParser('gbk')
     load = pyjson.load
     dump = pyjson.dump
     loadJson = pyjson.loadJson
