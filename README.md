@@ -12,28 +12,34 @@ The decoder can handle incoming JSON strings of any specified encoding (UTF-8 by
 
 Usage:
 Encoding basic Python object hierarchies:
->>> from JsonParser import JsonParser
->>> json = JsonParser('utf8')           # the encoding of str in dict is utf8
->>> json.loadDict({'bar': ['baz', u'baz', True, False, None, 1.0, 2]})
->>> print json.dump()                   # generate Json representation of dict loaded
-{"bar":["baz","baz",true,false,null,1.0,2]}
->>> json.dumpJson('json_file.json')     # save Json to file
->>> json.loadJson('json_file.json')     # load Json from file
+
+    from JsonParser import JsonParser
+    json = JsonParser('utf8')           # the encoding of str in Python dict is utf8
+    json.loadDict({'bar': ['baz', u'baz', True, False, None, 1.0, 2]})
+    print json.dump()                   # generate Json representation of dict loaded
+    #{"bar":["baz","baz",true,false,null,1.0,2]}
+    json.dumpJson('json_file.json')     # save Json to file
+    json.loadJson('json_file.json')     # load Json from file
+
 
 Decoding Json into Python representation:
->>> json_str = r'{"bar":["\b\\u60a8\u597d","baz","baz",true,false,null,1.0,2]}'
->>> json.load(json_str)
->>> json.dumpDict()
-{u'bar': [u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2]}
->>> json
-{u'bar': [u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2]}
+
+    json_str = r'{"bar":["\b\\u60a8\u597d","baz","baz",true,false,null,1.0,2]}'
+    json.load(json_str)
+    json.dumpDict()
+    #{u'bar': [u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2]}
+    print json
+    #{u'bar': [u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2]}
 
 Method of JsonParser like dict in Python:
->>> json['bar']                         # get item
-[u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2]
->>> json.update({'anthor dict': 8e+89}) # update by another dict
->>> json
-{u'bar': [u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2], 'anthor dict':8e+89}
->>> json['another dict'] = 0.8          # set item
->>> json
-{u'another dict': 0.8, u'bar': [u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2], 'anthor dict': 8e+89}
+    
+    json_str = r'{"bar":["\b\\u60a8\u597d","baz","baz",true,false,null,1.0,2]}'
+    json.load(json_str)
+    json['bar']                         # get item
+    #[u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2]
+    json.update({'another dict': 8e+89}) # update by another dict
+    json
+    #{'another dict': 8e+89, u'bar': [u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2]}
+    json['another dict'] = 0.8          # set item
+    json
+    #{u'another dict': 0.8, u'bar': [u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2], 'anthor dict': 8e+89}
