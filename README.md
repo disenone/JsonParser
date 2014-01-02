@@ -49,7 +49,6 @@ The decoder can parse the Json representation into Python object. It can handle 
 
 Usage
 -------------
-
 Encoding basic Python object hierarchies:
 
     from JsonParser import JsonParser
