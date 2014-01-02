@@ -3,7 +3,7 @@ JsonParser
 
 JSON (JavaScript Object Notation) <http://json.org> is a subset of JavaScript syntax (ECMA-262 3rd edition) used as a lightweight data interchange format.
 
-JsonParser, a simple Json encoder and decoder for Python 2.7. It is pure Python code with no dependencies.
+JsonParser(https://github.com/lugliang/JsonParser), a simple Json encoder and decoder for Python 2.7. It is pure Python code with no dependencies.
 
 The encoder can serialize dict into Json presentation. Support keys are str or unicode, supported value types in dict are [dict, list, int, float, bool, None, str, unicode].
 It can handle Python str of any specified encoding.
