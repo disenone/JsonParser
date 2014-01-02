@@ -47,7 +47,8 @@ The decoder can parse the Json representation into Python object. It can handle 
     | null          | None              |
     +---------------+-------------------+
 
-Usage:
+Usage
+-------------
 
 Encoding basic Python object hierarchies:
 
@@ -81,3 +82,7 @@ Method of JsonParser like dict in Python:
     json['another dict'] = 0.8          # set item
     json
     #{u'another dict': 0.8, u'bar': [u'\x08\\u60a8\u597d', u'baz', u'baz', True, False, None, 1.0, 2], 'anthor dict': 8e+89}
+
+Test
+-------------
+Test codes for JsonParser are located in json_test. Use run_all_test.py to test all the cases.
