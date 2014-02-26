@@ -1,6 +1,4 @@
 # encoding: utf-8
-__author__ = 'lgl'
-
 
 from JsonParser import JsonParser
 from JsonParser import match_string
@@ -29,8 +27,11 @@ def test_white_space_match():
 #test_scan_string()
 
 from JsonParser import parse_json_object
+from JsonParser import JsonDecoder
+from json import scanner
 def test_json_object():
-    pairs, end = parse_json_object(('"abc":213}', 0), 'utf-8')
+    jd = JsonDecoder()
+    pairs, end = parse_json_object(('"abc":213}', 0), 'utf-8', jd.scan_json)
     print pairs, type(pairs)
     jd = decoder.JSONDecoder()
     pairs, end = decoder.JSONObject(('"abc":213}', 0), 'utf-8', scan_once = jd.scan_once, strict=False, object_hook=None, object_pairs_hook=None)

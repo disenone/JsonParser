@@ -4,7 +4,7 @@ import json
 import doctest
 import unittest
 
-from test import test_support
+from run_test import test_support
 
 # import json with and without accelerations
 cjson = test_support.import_fresh_module('json', fresh=['_json'])

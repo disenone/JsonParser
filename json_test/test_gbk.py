@@ -31,15 +31,15 @@ class TestGBK(object):
             fp.close()
         try:
             self.pyjson_gbk.load(s)
-            out_json = self.dump()
-            d1 = self.dumpDict()
+            out_json = self.pyjson_gbk.dump()
+            d1 = self.pyjson_gbk.dumpDict()
             self.pyjson_gbk.load(out_json)
-            d2 = self.dumpDict()
+            d2 = self.pyjson_gbk.dumpDict()
             self.assertEqual(d1, d2)
             name = 'test_case/gbk_temp.json'
             self.pyjson_gbk.dumpJson(name)
             self.pyjson_gbk.loadJson(name)
-            d3 = self.dumpDict()
+            d3 = self.pyjson_gbk.dumpDict()
             self.assertEqual(d1, d3)
             os.remove(name)
         except ValueError:

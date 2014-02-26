@@ -1,30 +1,17 @@
 # encoding: utf-8
-""" Json Parser, Json <http://json.org> is lightweight data format.
-"""
+__author__ = 'lgl'
 
-
-def linecol(doc, pos):
-    lineno = doc.count('\n', 0, pos) + 1
-    if lineno == 1:
-        colno = pos
-    else:
-        colno = pos - doc.rindex('\n', 0, pos)
-    return lineno, colno
-
-
-def errmsg(msg, doc, pos, end=None):
-    # Note that this function is called from _json
-    lineno, colno = linecol(doc, pos)
-    if end is None:
-        fmt = '{0}: line {1} column {2} (char {3}: {4})'
-        return fmt.format(msg, lineno, colno, pos, doc[pos:pos + 1])
-        #fmt = '%s: line %d column %d (char %d)'
-        #return fmt % (msg, lineno, colno, pos)
-    endlineno, endcolno = linecol(doc, end)
-    fmt = '{0}: line {1} column {2} - line {3} column {4} (char {5} - {6}: {7})'
-    return fmt.format(msg, lineno, colno, endlineno, endcolno, pos, end, doc[pos:end])
-    #fmt = '%s: line %d column %d - line %d column %d (char %d - %d)'
-    #return fmt % (msg, lineno, colno, endlineno, endcolno, pos, end)
+def output_err(msg, string, begin, end = None):
+    def get_line_col(string, begin):
+        line_num = 1 + string.count('/n', 0, begin)
+        if line_num == 1:
+            return line_num, begin
+        else:
+            col_num = begin - string.rindex('\n', 0, begin)
+            return line_num, col_num
+    row, col = get_line_col(string, begin)
+    out = '{0}: line {1}, col {2}, char {3}: "{4}"'
+    return out.format(msg, row, col, begin, string[begin: end if end else begin + 1 ])
 
 
 __all__ = ['JsonParser']
@@ -40,6 +27,7 @@ FLOAT_CONSTANTS = {
 }
 
 NUMBER = '0123456789'
+HEX_NUMBER = '0123456789abcdefABCDEF'
 
 BACKSLASH = {
     '"': u'"', '\\': u'\\', '/': u'/',
@@ -65,6 +53,8 @@ ESCAPE_Python_2_Json = {
 # predefined encoding
 DEFAULT_ENCODING = "utf-8"
 UNICODE_ENCODING = 'unicode'
+
+
 
 def has_utf8_char(s):
     """
@@ -112,9 +102,10 @@ def match_string(s, idx):
                 # find json \uxxxx
                 nums = s[idx + 1: idx + 5]
                 next_end = idx + 5
-                if len(nums) != 4:
-                    msg = "Invalid \\uXXXX escape"
-                    raise ValueError(errmsg(msg, s, idx))
+                # check the four char is num
+                for one_num in nums:
+                    if one_num not in HEX_NUMBER:
+                        raise ValueError(output_err("Invalid \\uXXXX", s, idx, idx+5))
                 uni = int(nums, 16)
                 char = unichr(uni)
                 return (char, next_end)
@@ -123,8 +114,7 @@ def match_string(s, idx):
                 try:
                     char = BACKSLASH[s[idx]]
                 except KeyError:
-                    msg = "Invalid \\escape: " + repr(s[idx])
-                    raise ValueError(errmsg(msg, s, idx))
+                    raise ValueError(output_err('Invalid \\escape: ' + repr(s[idx]), s, idx))
                 return (char, idx + 1)
         elif s[idx] > '\x1f':
             # find normal chars
@@ -134,10 +124,9 @@ def match_string(s, idx):
             return (unicode(char), idx)
         else:
             # others invalid char
-            msg = "Invalid control character {0!r} at".format(s[idx])
-            raise ValueError(errmsg(msg, s, idx))
+            raise ValueError(output_err('Invalid control character', s, idx))
     except IndexError:
-        raise ValueError(errmsg("Unterminated string starting at", s, idx - 1))
+        raise ValueError(output_err("Unterminated string starting at", s, idx - 1))
 
 
 def parse_json_string(s, idx, encoding=DEFAULT_ENCODING):
@@ -241,169 +230,161 @@ def match_whitespace(s, idx):
             break
     return white_space, idx
 
+def get_next_char(string, idx):
+    try:
+        return string[idx], idx+1
+    except IndexError:
+        raise ValueError(output_err('unexpected end of string', string, idx))
 
-def parse_json_object(s_and_begin, encoding, scan_json):
-    """
-    parse Json object into Python dict, return the dict and string index follows
-    """
-    str, idx = s_and_begin
-    pairs = []
-    pairs_append = pairs.append
-
-    # Use a slice to prevent IndexError from being raised, the following
-    # check will raise a more specific ValueError if the string is empty
-    nextchar = str[idx:idx + 1]
-    # Normally we expect nextchar == '"'
-    if nextchar != '"':
-        white_spaces, idx = match_whitespace(str, idx)
-        nextchar = str[idx:idx + 1]
-        if nextchar == '}':
-            pairs = {}
-            return pairs, idx + 1
-        elif nextchar != '"':
-            raise ValueError(errmsg("Expecting property name", str, idx))
-
-    idx += 1
-
-    while True:
-        key, idx = parse_json_string(str, idx, encoding)
-
-        if str[idx:idx + 1] != ':':
-            white_spaces, idx = match_whitespace(str, idx)
-            if str[idx:idx + 1] != ':':
-                raise ValueError(errmsg("Expecting : delimiter: ':' ", str, idx))
-
-        idx += 1
-
-        # skip white space after ':'
-        white_spaces, idx = match_whitespace(str, idx)
-
-        try:
-            value, idx = scan_json(str, idx)
-        except StopIteration:
-            raise ValueError(errmsg("Expecting object", str, idx))
-        pairs_append((key, value))
-
-        white_spaces, idx = match_whitespace(str, idx)
-
-        # check for the next key:value or end of object
-        nextchar = str[idx:idx + 1]
-        idx += 1
-        if nextchar == '}':
-            break
-        elif nextchar != ',':
-            raise ValueError(errmsg("Expecting , delimiter: ',' ", str, idx - 1))
-
-        white_spaces, idx = match_whitespace(str, idx)
-
-        # check for a singleton ',', a ',' should be followed by a Json string
-        nextchar = str[idx:idx + 1]
-        if nextchar != '"':
-            raise ValueError(errmsg("Expecting property name", str, idx - 1))
-        idx += 1
-    pairs = dict(pairs)
-    return pairs, idx
-
-
-def parse_json_array(s_and_begin, scan_json):
-    str, idx = s_and_begin
-    values = []
-    white_spaces, idx = match_whitespace(str, idx)
-    nextchar = str[idx:idx + 1]
-
-    # check for trivial empty array
-    if nextchar == ']':
-        return values, idx + 1
-    _append = values.append
-
-    while True:
-        try:
-            value, idx = scan_json(str, idx)
-        except StopIteration:
-            raise ValueError(errmsg("Expecting object", str, idx))
-        _append(value)
-
-        white_spaces, idx = match_whitespace(str, idx)
-        nextchar = str[idx:idx + 1]
-        idx += 1
-        if nextchar == ']':
-            break
-        elif nextchar != ',':
-            raise ValueError(errmsg("Expecting , delimiter: ',' ", str, idx))
-        white_spaces, idx = match_whitespace(str, idx)
-    return values, idx
-
-
-class JsonDecoder(object):
-    """
-    parse Json string into Python dict
-    """
-    def __init__(self, encoding=DEFAULT_ENCODING):
-        """
-        encoding determines the encoding used to interpret any ``str``
-        objects representing Json string of decoded by this instance (utf-8 by default).
-        It has no effect when decoding ``unicode`` objects.
-        """
-        self.encoding = encoding
-        self.parse_float = float
-        self.parse_int = int
-        self.parse_object = parse_json_object
-        self.parse_array = parse_json_array
-        self.parse_string = parse_json_string
-
-    def decode(self, s):
-        if not isinstance(s, (str, unicode)):
-            raise ValueError("Input must be str or unicode, (type {0} is given).".format(type(s)))
-        white_spaces, idx = match_whitespace(s, 0)
-        obj, end = self.scan_json(s, idx, first = True)
-        white_spaces, end = match_whitespace(s, end)
-        if end != len(s):
-            raise ValueError(errmsg("Extra data", s, end, len(s)))
-        return obj, end
-
-    def scan_json(self, string, idx, first = False):
-        try:
-            nextchar = string[idx]
-        except IndexError:
-            raise StopIteration
-
-        if first and nextchar != '{':
-            msg = 'Expecting "{" at the beginning of json string: '
-            raise ValueError(errmsg(msg, string, idx))
-
-        if nextchar == '"':
-            return self.parse_string(string, idx + 1, self.encoding)
-        elif nextchar == '{':
-            return self.parse_object((string, idx + 1), self.encoding, self.scan_json)
-        elif nextchar == '[':
-            return self.parse_array((string, idx + 1), self.scan_json)
-        elif nextchar == 'n' and string[idx:idx + 4] == 'null':
-            return None, idx + 4
-        elif nextchar == 't' and string[idx:idx + 4] == 'true':
-            return True, idx + 4
-        elif nextchar == 'f' and string[idx:idx + 5] == 'false':
-            return False, idx + 5
-
-        oldidx = idx
-        integer, frac, exp, idx = match_number(string, idx)
-        if integer or frac :
-            if frac or exp:
-                res = self.parse_float((integer or '') + (frac or '') + (exp or ''))
-                if res == float('inf') or res == float('-inf') or res == float('nan'):
-                    msg = 'Number out of range: '
-                    raise ValueError(errmsg(msg, string, oldidx, idx))
-            else:
-                res = self.parse_int(integer)
-            return res, idx
+def parse_json_object(string, begin, encoding):
+    # check string or empty
+    white_space, idx = match_whitespace(string, begin)
+    c, idx = get_next_char(string, idx)
+    if c != '"':
+        if c == '}':
+            return {}, idx
         else:
-            raise StopIteration
+            raise ValueError(output_err('Object is not complete, expecting "}"', string, idx))
+
+    out_dict = {}
+    while True:
+        # get key
+        key, idx = parse_json_string(string, idx, encoding)
+
+        # find :
+        white_space, idx = match_whitespace(string, idx)
+        c, idx = get_next_char(string, idx)
+        if c != ':':
+            raise ValueError(output_err('Excepting ":" after key string', string, idx))
+
+        # get value
+        value, idx = decode_one_json(string, idx, encoding)
+
+        # add to dict
+        out_dict[key] = value
+
+        # find ,
+        white_space, idx = match_whitespace(string, idx)
+        c, idx = get_next_char(string, idx)
+        if c == '}':
+            break
+        if c != ',':
+            raise ValueError(output_err('Excepting "," or "}"', string, idx))
+
+        white_space, idx = match_whitespace(string, idx)
+        c, idx = get_next_char(string, idx)
+        if c != '"':
+            raise ValueError(output_err('Excepting """', string, idx))
+
+    return out_dict, idx
+
+def parse_json_array(string, begin, encoding):
+    # check empty
+    white_space, idx = match_whitespace(string, begin)
+    c, idx = get_next_char(string, idx)
+    if c == ']':
+        return [], idx
+    out_array = []
+    idx = idx - 1
+    while True:
+        # get one value in array
+        value, idx = decode_one_json(string, idx, encoding)
+        out_array.append(value)
+
+        # check for the next or end
+        white_space, idx = match_whitespace(string, idx)
+        c, idx = get_next_char(string, idx)
+        if c == ']':
+            break
+        if c != ',':
+            raise ValueError(output_err('Excepting "," or "]"', string, idx))
+        white_space, idx = match_whitespace(string, idx)
+    return out_array, idx
+
+def parse_json_null(string, begin):
+    if string[begin: begin+4] == 'null':
+        return None, begin+4
+    else:
+        raise KeyError
+
+def parse_json_true(string, begin):
+    if string[begin: begin+4] == 'true':
+        return True, begin+4
+    else:
+        raise KeyError
+
+def parse_json_false(string, begin):
+    if string[begin: begin+5] == 'false':
+        return False, begin+5
+    else:
+        raise KeyError
+
+def parse_json_number(string, begin):
+    integer, frac, exp, idx = match_number(string, begin)
+    # find number
+    if integer or frac :
+        # if float
+        if frac or exp:
+            res = float((integer or '') + (frac or '') + (exp or ''))
+            if res == float('inf') or res == float('-inf') or res == float('nan'):
+                raise ValueError(output_err('Number out of range: ', string, begin, idx))
+        # else integer
+        else:
+            res = int(integer)
+        return res, idx
+    else:
+        raise ValueError(output_err('Can not parse json string: ', string, idx))
+
+# a function map for decode different json type
+decode_func_map = {
+    '"': lambda string, idx, encoding: parse_json_string(string, idx, encoding),
+    '{': lambda string, idx, encoding: parse_json_object(string, idx, encoding),
+    '[': lambda string, idx, encoding: parse_json_array(string, idx, encoding),
+    'n': lambda string, idx, encoding: parse_json_null(string, idx-1),
+    't': lambda string, idx, encoding: parse_json_true(string, idx-1),
+    'f': lambda string, idx, encoding: parse_json_false(string, idx-1)
+}
+
+def decode_one_json(string, begin, encoding):
+    first = False
+    if begin == 0:
+        first = True
+
+    white_space, idx = match_whitespace(string, begin)
+    c, idx = get_next_char(string, idx)
+
+    # if the first time enter this func, check if it's a json object, we will only parse json object
+    if first and c != '{':
+        raise ValueError(output_err('Expecting "{" at the beginning of json string: ', string, idx))
+
+    # call different func to parse, based on the beginning char
+    try:
+        return decode_func_map[c](string, idx, encoding)
+    except KeyError:
+        return parse_json_number(string, idx-1)
+
+def decode_json(string, begin, encoding = DEFAULT_ENCODING):
+    """
+    entry function to decode a json string, any error will be raise by ValueError with a error msg
+
+    """
+    obj, end = decode_one_json(string, begin, encoding)
+    white_spaces, end = match_whitespace(string, end)
+    # check if more data that we have not parsed
+    str_len = len(string)
+    if end != str_len:
+        raise ValueError(output_err("Redundant data detected", string, end, str_len))
+    return obj, end
 
 def encode_python_string(encoding = UNICODE_ENCODING):
     """
     Return a unicode JSON representation of a Python unicode string
     """
     def _encode(pystr):
-        def replace(pc):
+        def convert_escape(pc):
+            """
+            Convert python escape into json string
+            """
             try:
                 jc = ESCAPE_Python_2_Json[pc]
             except KeyError:
@@ -415,208 +396,123 @@ def encode_python_string(encoding = UNICODE_ENCODING):
             return jc
 
         pystr = convert_str_2_unicode(pystr, encoding)
+        # begining of the string
         json_uni = u'"'
+        # convert escape
         for pc in pystr:
-            json_uni += replace(pc)
+            json_uni += convert_escape(pc)
+        # end of the string
         json_uni += u'"'
         return json_uni
     return _encode
 
-class JsonEncoder(object):
-    item_separator = u','
-    key_deparator = u':'
+def encode_python_float(f, encoding):
+    """
+    Encode python float num into json
+    """
+    if f != f  or f == INFINITY or f == NEG_INFINITY:
+        raise ValueError("Float values out of range : " + repr(f))
+    else:
+        return repr(f).decode(encoding)
 
-    def __init__(self, check_circular=True, encoding=UNICODE_ENCODING):
-        """
-        If check_circular is true, then lists, dicts, and custom encoded
-        objects will be checked for circular references during encoding to
-        prevent an infinite recursion (which would cause an OverflowError).
-        Otherwise, no such check takes place.
+def encode_python_dict(dct, encoding, id_record):
+    """
+    Encode pyhton dict into json
+    """
+    if not dct:
+        return '{}'
+    # check circular
+    dict_id = id(dct)
+    if dict_id in id_record:
+        raise ValueError("Circular reference found.")
+    id_record[dict_id] = dct
+    # beginning of dict
+    str_arrray = ['{']
+    append = str_arrray.append
 
-        encoding, all input strings of self.__data will be
-        transformed into unicode using that encoding prior to JSON-encoding.
-        The default is UTF-8.
-        """
-        self.check_circular = check_circular
-        self.encoding = encoding
-        self.string_encoder = encode_python_string(encoding = self.encoding)
-
-    def encode(self, o):
-        chunks = self.iter_encode(o)
-        if not isinstance(chunks, (list, type)):
-            chunks = list(chunks)
-        return u''.join(chunks)
-
-    def iter_encode(self, o):
-        if self.check_circular:
-            markers = {}
+    first = True
+    for key, value in dct.iteritems():
+        # if the first item, no ',' in front of it
+        if first:
+            first = False
+        # else add ',' before this item
         else:
-            markers = None
-        str_encoder = self.string_encoder
-        if self.encoding != UNICODE_ENCODING:
-            def str_encoder(o, _orig_encoder=str_encoder, encoding=self.encoding):
-                if isinstance(o, str):
-                    o = o.decode(encoding)
-                return _orig_encoder(o)
+            append(',')
+        # key must be string
+        append(encode_python_string(encoding)(key))
+        # ':' between key and value
+        append(':')
+        # encode value to json
+        append(encode_python(value, encoding, id_record))
+    # end of dict
+    append('}')
+    # return a single unicode
+    return u''.join(str_arrray)
 
-        def floatstr(o, _inf=INFINITY, _neginf=NEG_INFINITY):
-            if o != o  or o == _inf or o == _neginf:
-                raise ValueError("Out of range float values are not JSON compliant: " +
-                                 repr(o))
-            else:
-                return repr(o).decode(DEFAULT_ENCODING)
-
-        _iter_encode = _make_iter_encode(
-            markers, str_encoder, floatstr, self.key_deparator, self.item_separator)
-
-        return _iter_encode(o)
-
-
-def _make_iter_encode(markers, _str_encoder, _floatstr, _key_separator, _item_separator,
-                      ValueError=ValueError,
-                      basestring=basestring,
-                      dict=dict,
-                      float=float,
-                      id=id,
-                      int=int,
-                      isinstance=isinstance,
-                      list=list,
-                      long=long,
-                      str=str,
-):
-    def _iter_encode_list(lst):
-        if not lst:
-            yield u'[]'
-            return
-        # check circular
-        if markers is not None:
-            markerid = id(lst)
-            if markerid in markers:
-                raise ValueError("Circular reference detected")
-            markers[markerid] = lst
-        buf = u'['
-        separator = _item_separator
-        first = True
-        for value in lst:
-            if first:
-                first = False
-            else:
-                buf = separator
-            # encode value into Json
-            if isinstance(value, basestring):
-                yield buf + _str_encoder(value)
-            elif value is None:
-                yield buf + u'null'
-            elif value is True:
-                yield buf + u'true'
-            elif value is False:
-                yield buf + u'false'
-            elif isinstance(value, (int, long)):
-                yield buf + unicode(value)
-            elif isinstance(value, float):
-                yield buf + _floatstr(value)
-            else:
-                yield buf
-                if isinstance(value, list):
-                    chunks = _iter_encode_list(value)
-                elif isinstance(value, dict):
-                    chunks = _iter_encode_dict(value)
-                else:
-                    raise ValueError("Type {0} is not support".format(repr(type(o))))
-                for chunk in chunks:
-                    yield chunk
-        yield u']'
-        if markers is not None:
-            del markers[markerid]
-
-    def _iter_encode_dict(dct):
-        if not dct:
-            yield u'{}'
-            return
-        # check circular
-        if markers is not None:
-            markerid = id(dct)
-            if markerid in markers:
-                raise ValueError("Circular reference detected")
-            markers[markerid] = dct
-        yield u'{'
-        item_separator = _item_separator
-        first = True
-        items = dct.iteritems()
-        for key, value in items:
-            # deal with key
-            if isinstance(key, basestring):
-                pass
-            else:
-                # ignore keys which are not string
-                continue
-            if first:
-                first = False
-            else:
-                yield item_separator
-            yield _str_encoder(key)
-            yield _key_separator
-
-            # deal with value
-            if isinstance(value, basestring):
-                yield _str_encoder(value)
-            elif value is None:
-                yield u'null'
-            elif value is True:
-                yield u'true'
-            elif value is False:
-                yield u'false'
-            elif isinstance(value, (int, long)):
-                yield unicode(value)
-            elif isinstance(value, float):
-                yield _floatstr(value)
-            else:
-                if isinstance(value, list):
-                    chunks = _iter_encode_list(value)
-                elif isinstance(value, dict):
-                    chunks = _iter_encode_dict(value)
-                else:
-                    raise ValueError("Type {0} is not support".format(repr(type(o))))
-                for chunk in chunks:
-                    yield chunk
-        yield u'}'
-        if markers is not None:
-            del markers[markerid]
-
-    def _iterencode(o):
-        if isinstance(o, basestring):
-            yield _str_encoder(o)
-        elif o is None:
-            yield u'null'
-        elif o is True:
-            yield u'true'
-        elif o is False:
-            yield u'false'
-        elif isinstance(o, (int, long)):
-            yield str(o)
-        elif isinstance(o, float):
-            yield _floatstr(o)
-        elif isinstance(o, list):
-            for chunk in _iter_encode_list(o):
-                yield chunk
-        elif isinstance(o, dict):
-            for chunk in _iter_encode_dict(o):
-                yield chunk
+def encode_python_list(lst, encoding, id_record):
+    """
+    encode python list into json
+    """
+    if not lst:
+        return '[]'
+    # check circular
+    list_id = id(lst)
+    if list_id in id_record:
+        raise ValueError("Circular reference found.")
+    id_record[list_id] = lst
+    # beginning of list
+    str_array = ['[']
+    append = str_array.append
+    first = True
+    for value in lst:
+        # first item nothing before
+        if first:
+            first = False
+        # else put a ',' before this item
         else:
-            raise ValueError("Type {0} is not support".format(repr(type(o))))
+            append(',')
+        # encode value
+        append(encode_python(value, encoding, id_record))
+    # end of list
+    append(']')
+    # return a single unicode
+    return u''.join(str_array)
 
-    return _iterencode
+
+def encode_python(obj, encoding = UNICODE_ENCODING, id_record = {}):
+    """
+    entry function to encode a python object, any error will be raise by ValueError with a error msg
+
+    """
+    str_array = []
+    append = str_array.append
+    if isinstance(obj, dict):
+        append( encode_python_dict(obj, encoding, id_record) )
+    elif isinstance(obj, list):
+        append( encode_python_list(obj, encoding, id_record) )
+    elif isinstance(obj, basestring):
+        append(encode_python_string(encoding)(obj))
+    elif isinstance(obj, float):
+        append( encode_python_float(obj, encoding) )
+    # True, False must be encode before int, because True, False is instance of int
+    elif obj is True:
+        append( u'true')
+    elif obj is False:
+        append( u'false')
+    # now we can deal with int
+    elif isinstance(obj, (int, long)):
+        append( str(obj) )
+    elif obj is None:
+        append( u'null')
+    # any other type will not be supported
+    else:
+        raise ValueError("Type {0} is not supported".format(repr(type(obj))))
+    return u''.join(str_array)
 
 class JsonParser:
     def __init__(self, encoding=DEFAULT_ENCODING):
         """
-        encoding, all input strings of self.__data will be
-        transformed into unicode using that encoding prior to JSON-encoding.
-        The default is UTF-8.
-
-        encoding also determines the encoding used to interpret any ``str``
-        objects representing Json string of decoded by this instance (utf-8 by default).
-        It has no effect when decoding ``unicode`` objects.
+        encoding, specify the encoding of input json. The default is UTF-8.
         """
         self.__data = {}
         self.encoding = encoding
@@ -626,10 +522,10 @@ class JsonParser:
         """
         if not isinstance(s, basestring):
             raise ValueError("Input must be str or unicode, (type {0} is given).".format(type(s)))
-        decoder = JsonDecoder(self.encoding)
         s = convert_str_2_unicode(s, self.encoding)
-        self.__data, end = decoder.decode(s)
-
+        self.__data, end = decode_json(s, 0, self.encoding)
+        end = end + 1;
+        return end
     def loadJson(self, f):
         """
         load json string from file f, save it as python dict in self.__data
@@ -637,23 +533,20 @@ class JsonParser:
         with open(f) as fp:
             s = fp.read()
         s = convert_str_2_unicode(s, self.encoding)
-        decoder = JsonDecoder(self.encoding)
-        self.__data, end = decoder.decode(s)
+        self.__data, end = decode_json(s, 0, self.encoding)
 
     def dump(self):
         """
         return json string base on dict self.__data
         """
-        encoder = JsonEncoder(encoding = self.encoding)
-        return encoder.encode(self.__data)
+        return encode_python(self.__data, self.encoding)
 
     def dumpJson(self, f):
         """
         save json string base on dict self.__data into file f
         """
         with open(f, 'w') as fp:
-            encoder = JsonEncoder(encoding = self.encoding)
-            fp.write(encoder.encode(self.__data))
+            fp.write(encode_python(self.__data, self.encoding))
 
     def update(self, d):
         """
@@ -664,7 +557,7 @@ class JsonParser:
             raise ValueError('Input must be dict, (type {0} is given).'.format(type(d)))
         for key, value in d.iteritems():
             if isinstance(key, basestring):
-                self.__data[key] = deepcopy(value)
+                self.__data[key] = my_deepcopy(value)
 
     def loadDict(self, d):
         """
@@ -677,7 +570,7 @@ class JsonParser:
         """
         return a Python dict, deepcopy of self.__data
         """
-        return deepcopy(self.__data)
+        return my_deepcopy(self.__data)
 
     def dict_id(self):
         """
@@ -706,66 +599,69 @@ class JsonParser:
         return str(self.__data)
 
 
-def deepcopy(x, memo=None, _nil=[]):
+def my_deepcopy(obj, memory={}):
     """
-    make a deep copy of object x
+    make a deep copy of object obj
     """
+    # check if obj exist in memory
+    obj_id = id(obj)
+    copy = memory.get(obj_id, None)
+    if copy is not None:
+        return copy
 
-    if memo is None:
-        memo = {}
-
-    d = id(x)
-    y = memo.get(d, _nil)
-    if y is not _nil:
-        return y
-
-    cls = type(x)
-
-    copier = _deepcopy_dispatch.get(cls)
-    if copier:
-        y = copier(x, memo)
+    # get the type copier
+    cls = type(obj)
+    deep_copier = _deepcopy_func_map.get(cls, None)
+    if deep_copier:
+        copy = deep_copier(obj, memory)
     else:
-        raise ValueError( "Not support object of type %s" % cls)
+        raise ValueError( "Not support object of type {0}".format(str(cls)))
 
-    memo[d] = y
-    _keep_alive(x, memo) # Make sure x lives at least as long as d
-    return y
+    # keep obj alive
+    memory[obj_id] = copy
+    _add_to_memory(obj, memory)
+    return copy
 
-def _keep_alive(x, memo):
+def _add_to_memory(obj, memory):
     try:
-        memo[id(memo)].append(x)
-    except KeyError:
-        memo[id(memo)]=[x]
+        memory[id(memory)].append(obj)
+    except KeyError:    # if not exist, create then
+        memory[id(memory)]=[obj]
 
 # a dict to remember types which can be deep copied
-_deepcopy_dispatch = d = {}
+_deepcopy_func_map = {}
 
-def _deepcopy_atomic(x, memo):
-    return x
+# a basic copy, only return obj itself
+def _deepcopy_basic(obj, memory):
+    return obj
+
+# deep copy for list, iteratively deep copy items
+def _deepcopy_list(lst, memory):
+    y = []
+    # memory the list
+    memory[id(lst)] = y
+    for value in lst:
+        y.append(my_deepcopy(value, memory))
+    return y
+
+# deep copy for list, iteratively deep copy items
+def _deepcopy_dict(dct, memory):
+    y = {}
+    # memory the dict
+    memory[id(dct)] = y
+    for key, value in dct.iteritems():
+        y[my_deepcopy(key, memory)] = my_deepcopy(value, memory)
+    return y
 
 """
 only [None, int, long, float, bool, str, unicode, list, dict] can be deep copied
 """
-d[type(None)] = _deepcopy_atomic
-d[int] = _deepcopy_atomic
-d[long] = _deepcopy_atomic
-d[float] = _deepcopy_atomic
-d[bool] = _deepcopy_atomic
-d[str] = _deepcopy_atomic
-d[unicode] = _deepcopy_atomic
-
-def _deepcopy_list(x, memo):
-    y = []
-    memo[id(x)] = y
-    for a in x:
-        y.append(deepcopy(a, memo))
-    return y
-d[list] = _deepcopy_list
-
-def _deepcopy_dict(x, memo):
-    y = {}
-    memo[id(x)] = y
-    for key, value in x.iteritems():
-        y[deepcopy(key, memo)] = deepcopy(value, memo)
-    return y
-d[dict] = _deepcopy_dict
+_deepcopy_func_map[type(None)] = _deepcopy_basic
+_deepcopy_func_map[int] = _deepcopy_basic
+_deepcopy_func_map[long] = _deepcopy_basic
+_deepcopy_func_map[float] = _deepcopy_basic
+_deepcopy_func_map[bool] = _deepcopy_basic
+_deepcopy_func_map[str] = _deepcopy_basic
+_deepcopy_func_map[unicode] = _deepcopy_basic
+_deepcopy_func_map[list] = _deepcopy_list
+_deepcopy_func_map[dict] = _deepcopy_dict
